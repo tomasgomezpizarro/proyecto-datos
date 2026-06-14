@@ -1,0 +1,7 @@
+# Entorno virtual local
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
