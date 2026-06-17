@@ -58,6 +58,14 @@ AMARILLAS = CIRCUNSTANCIA + USO_REDES
 
 EXTRA = VERDES + AMARILLAS
 
+# ---- Niveles de rigor: que sacar para la version "estricta" ----
+# lcself (autoubicacion izq-der) ~ identidad partidaria; covid_vacc = marcador
+# partidario en ola 3. La version "muy estricta" saca ademas police/periodistas
+# (litmus partidarios). Sacar todo esto cuesta ~2 puntos -> el rescate es robusto.
+QUITAR_ESTRICTO = ["w2lcself", "w3lcself", "w3covid_vacc"]
+QUITAR_MUY_ESTRICTO = QUITAR_ESTRICTO + [
+    "w2ftpolice", "w3ftpolice", "w2ftjournal", "w3ftjournal"]
+
 
 def build_modelo_d(df):
     """Demo+redes (whitelist) + columnas rescatadas, con missing -> NaN."""
@@ -91,14 +99,20 @@ def _prep(X):
 
 def cv(target):
     df, y = datos(target)
-    Xc = _prep(df[[c for c in E.DEMO_REDES if c in df.columns]].copy())
-    Xd = build_modelo_d(df)
+    base = E.DEMO_REDES + EXTRA
+    variantes = [
+        ("C  demo+redes",                 E.DEMO_REDES),
+        ("D  amplio (todo rescatado)",    base),
+        ("D-estricto (-lcself,-vacc)",    [c for c in base if c not in QUITAR_ESTRICTO]),
+        ("D-muy estricto (-police,-jrn)", [c for c in base if c not in QUITAR_MUY_ESTRICTO]),
+    ]
     skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=RANDOM_STATE)
-    for nombre, X in [("C  demo+redes", Xc), ("D  + estables/factuales", Xd)]:
+    for nombre, cols in variantes:
+        X = _prep(df[[c for c in cols if c in df.columns]].copy())
         r = cross_validate(HistGradientBoostingClassifier(random_state=RANDOM_STATE),
                            X, y, cv=skf, scoring=["accuracy", "f1_macro"])
         a, f = r["test_accuracy"], r["test_f1_macro"]
-        print(f"  {nombre:26s} feats={X.shape[1]:3d}  "
+        print(f"  {nombre:32s} feats={X.shape[1]:3d}  "
               f"acc={a.mean():.3f}±{a.std():.3f}  f1={f.mean():.3f}±{f.std():.3f}")
 
 
