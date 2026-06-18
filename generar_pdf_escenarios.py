@@ -160,6 +160,167 @@ def legible(var):
     return var
 
 
+# ---------------- pie de pagina (numeracion) ----------------
+def _numero_pagina(canvas, doc):
+    canvas.saveState()
+    canvas.setFont("Helvetica", 8)
+    canvas.setFillColor(colors.HexColor("#999999"))
+    canvas.drawCentredString(A4[0] / 2, 1.0 * cm, str(doc.page))
+    canvas.restoreState()
+
+
+def _sin_numero(canvas, doc):
+    pass
+
+
+# ---------------- portada ----------------
+def portada(el, ss):
+    from reportlab.platypus import PageBreak
+    from reportlab.lib.enums import TA_CENTER
+    cen = ParagraphStyle("cen", parent=ss["Normal"], alignment=TA_CENTER)
+    titulo = ParagraphStyle("ptit", parent=cen, fontSize=22, leading=27,
+                            spaceAfter=10, textColor=colors.HexColor("#1A1A1A"))
+    subt = ParagraphStyle("psub", parent=cen, fontSize=12.5, leading=17,
+                          textColor=colors.HexColor("#555555"))
+    meta = ParagraphStyle("pmeta", parent=cen, fontSize=11, leading=16)
+    chico = ParagraphStyle("pchico", parent=cen, fontSize=9.5,
+                           textColor=colors.HexColor("#777777"))
+
+    el.append(Spacer(1, 4.5 * cm))
+    el.append(Paragraph("¿Qué determina el voto?", titulo))
+    el.append(Paragraph("Predicción del voto presidencial 2020 (EE.UU.) a partir de "
+                        "perfil, uso de redes y actitudes", subt))
+    el.append(Spacer(1, 0.6 * cm))
+    el.append(Paragraph("— ANES Special Study 2020-2022 (Social Media) —", chico))
+    el.append(Spacer(1, 3.5 * cm))
+    el.append(Paragraph("<b>Tomás Gómez Pizarro · Mikael Rodríguez</b>", meta))
+    el.append(Spacer(1, 0.3 * cm))
+    el.append(Paragraph("Ciencia de Datos 2026 — FAMAF, Universidad Nacional de "
+                        "Córdoba", meta))
+    el.append(Spacer(1, 0.2 * cm))
+    el.append(Paragraph("Junio de 2026", meta))
+    el.append(Spacer(1, 4.0 * cm))
+    el.append(Paragraph("github.com/tomasgomezpizarro/proyecto-datos", chico))
+    el.append(PageBreak())
+
+
+# ---------------- resumen ejecutivo ----------------
+def seccion_resumen(el, ss, h1, intro, sec_t, body, cap):
+    el.append(Paragraph("Resumen", h1))
+    el.append(Paragraph(
+        "Predecimos el <b>voto presidencial 2020 (Trump vs Biden)</b> sobre la "
+        "encuesta ANES Special Study 2020-2022 (5.750 encuestados, 914 variables) y, "
+        "más que maximizar el acierto, estudiamos <b>qué tipo de información</b> lo "
+        "determina. El desafío central es metodológico: separar predictores "
+        "legítimos de <i>fugas</i> (<i>leakage</i>) en cientos de variables. "
+        "Construimos una <b>escalera de escenarios</b> ordenada por “explicitud "
+        "política” y medimos cuánto aporta cada bloque de información.", body))
+    el.append(Paragraph(
+        "Hallazgo principal: la <b>demografía sola predice poco</b> (~0,75); el salto "
+        "decisivo lo dan las <b>posiciones sobre issues</b> (aborto, clima, armas), "
+        "que llevan el accuracy a <b>0,93</b>. La ideología auto-declarada resulta "
+        "redundante una vez conocidos los issues. El <b>tuning de hiperparámetros, la "
+        "elección de algoritmo y la cantidad de datos casi no mueven la aguja</b>: el "
+        "cuello de botella es la información, no el modelo. El error remanente (~3-6%) "
+        "es irreducible —los <b>votantes cruzados</b>, que votan contra su propio "
+        "perfil—.", body))
+
+
+# ---------------- datos y metodologia ----------------
+def seccion_metodologia(el, ss, h1, intro, sec_t, body, cap):
+    from reportlab.platypus import PageBreak
+    el.append(PageBreak())
+    el.append(Paragraph("Datos y metodología", h1))
+
+    el.append(Paragraph("Los datos", sec_t))
+    el.append(Paragraph(
+        "<b>ANES Special Study 2020-2022 (Social Media)</b>: 5.750 encuestados × 914 "
+        "variables, en tres olas (pre-elección, post-elección y seguimiento 2021-22). "
+        "Los faltantes vienen codificados con negativos (−1…−9) → convertidos a "
+        "<i>NaN</i>. Las respuestas son códigos ordinales, no magnitudes: los modelos "
+        "de árboles los toleran; los lineales se usan como baseline. Por defecto se "
+        "excluyen las variables de las olas 2 y 3 (medidas igual o después del voto).", body))
+
+    el.append(Paragraph("Un hallazgo previo: la label estaba mal identificada", sec_t))
+    el.append(Paragraph(
+        "El primer candidato a variable objetivo, <i>vote20cand</i>, resultó ser la "
+        "<b>primaria demócrata</b> (Biden vs Sanders vs Warren…), no la elección "
+        "general. Lo detectamos porque un binario “Biden vs Trump” daba apenas 86% y "
+        "porque los códigos no cerraban: al decodificarlos con los termómetros de "
+        "sentimiento, <i>todos</i> los grupos resultaban pro-Biden. La variable "
+        "correcta es <b>w2presvtwho</b> (Trump 1.801 · Biden 2.561 · Otro 171), "
+        "verificada con termómetros. <b>Lección: desconfiar de un número que “hace "
+        "ruido” y verificar el significado contra el codebook.</b>", body))
+
+    el.append(Paragraph("La taxonomía de leakage (el corazón metodológico)", sec_t))
+    el.append(Paragraph(
+        "Con 914 variables, el problema central es separar predictores legítimos de "
+        "<i>fugas</i>. Lo decidimos por la pregunta: <i>“¿es causa o consecuencia del "
+        "voto?”</i>", body))
+    tax = [
+        ["Tipo", "Ejemplos", "Decisión"],
+        ["Leakage directo", "a quién votó, voto a diputados/senadores", "excluir"],
+        ["Consecuencia del voto", "aprobación post, emociones del resultado", "excluir"],
+        ["Percepción partidaria", "estado de la economía, confianza en instituciones", "excluir"],
+        ["Proxy de preferencia", "“qué partido es mejor en X”, termómetros a candidatos", "excluir"],
+        ["Leakage temporal", "toda variable de la ola 2/3", "excluir"],
+        ["Predisposición estable", "valores, afecto a grupos, ideología", "USAR"],
+        ["Apolítico", "demografía, salud factual, uso de redes", "USAR"],
+    ]
+    tt = Table(tax, colWidths=[3.8 * cm, 8.4 * cm, 2.3 * cm])
+    estilo = [
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#333333")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("ALIGN", (2, 0), (2, -1), "CENTER"),
+        ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#CCCCCC")),
+    ]
+    # filas "USAR" en verde, "excluir" en rojo tenue
+    for i in range(1, len(tax)):
+        dec = tax[i][2]
+        c = colors.HexColor("#1E8449") if dec == "USAR" else colors.HexColor("#B03A2E")
+        estilo.append(("TEXTCOLOR", (2, i), (2, i), c))
+        estilo.append(("FONTNAME", (2, i), (2, i), "Helvetica-Bold"))
+    tt.setStyle(TableStyle(estilo))
+    el.append(tt)
+    el.append(Paragraph(
+        "<b>Matiz clave:</b> “medido después de la elección” <b>no</b> es lo mismo que "
+        "<i>leakage</i>. Una actitud estable (visión sobre capitalistas/gays, "
+        "resentimiento racial) es <b>anterior y causal</b>, aunque se haya preguntado "
+        "en la ola post-electoral.", cap))
+
+    el.append(Paragraph("Validación", sec_t))
+    el.append(Paragraph(
+        "Métricas: <b>accuracy + f1_macro</b> (por el desbalance) y matriz de "
+        "confusión / recall por clase. Estimación con <b>holdout repetido ×5</b> "
+        "(media ± desvío): no se lee el tercer decimal de un único split (su error de "
+        "muestreo es ≈ ±0,6-1,3%). Modelo principal: <b>XGBoost</b>; se comparan "
+        "Regresión Logística, LDA y Random Forest como referencia.", body))
+
+
+# ---------------- referencias ----------------
+def seccion_referencias(el, ss, h1, intro, sec_t, body, cap):
+    from reportlab.platypus import PageBreak
+    el.append(PageBreak())
+    el.append(Paragraph("Referencias", h1))
+    ref = ParagraphStyle("ref", parent=body, leftIndent=14, firstLineIndent=-14,
+                         spaceAfter=8)
+    el.append(Paragraph(
+        "American National Election Studies (2023). <i>ANES 2020-2022 Social Media "
+        "Study</i> [dataset y user guide / codebook]. www.electionstudies.org.", ref))
+    el.append(Paragraph(
+        "Bergstra, J. &amp; Bengio, Y. (2012). <i>Random Search for Hyper-Parameter "
+        "Optimization.</i> Journal of Machine Learning Research, 13, 281–305.", ref))
+    el.append(Paragraph(
+        "Chen, T. &amp; Guestrin, C. (2016). <i>XGBoost: A Scalable Tree Boosting "
+        "System.</i> Proceedings of KDD ’16, 785–794.", ref))
+    el.append(Paragraph(
+        "Pedregosa, F. et al. (2011). <i>Scikit-learn: Machine Learning in Python.</i> "
+        "Journal of Machine Learning Research, 12, 2825–2830.", ref))
+
+
 def build():
     doc = SimpleDocTemplate(
         "escenarios_por_tipo.pdf", pagesize=A4,
@@ -183,7 +344,16 @@ def build():
     cap = ParagraphStyle("cap", parent=ss["Normal"], fontSize=8.5,
                          textColor=colors.HexColor("#666666"), spaceBefore=4)
 
+    from reportlab.platypus import PageBreak
     el = []
+
+    # ===== portada + resumen + metodologia =====
+    portada(el, ss)
+    seccion_resumen(el, ss, h1, intro, sec_t, body, cap)
+    seccion_metodologia(el, ss, h1, intro, sec_t, body, cap)
+
+    # ===== cuerpo: escenarios por tipo de informacion =====
+    el.append(PageBreak())
     el.append(Paragraph("Escenarios por tipo de información", h1))
     el.append(Paragraph("Predicción del voto presidencial 2020 (Trump vs Biden) — "
                         "ANES Social Media 2020-2022", sub))
@@ -320,8 +490,10 @@ def build():
     seccion_hiperparametros(el, ss, h1, intro, sec_t, body, cap)
     # ---- D) conclusiones ----
     seccion_conclusiones(el, ss, h1, intro, sec_t, body, cap)
+    # ---- E) referencias ----
+    seccion_referencias(el, ss, h1, intro, sec_t, body, cap)
 
-    doc.build(el)
+    doc.build(el, onFirstPage=_sin_numero, onLaterPages=_numero_pagina)
     print("guardado: escenarios_por_tipo.pdf")
 
 
