@@ -4,6 +4,7 @@ explicacion de que incluye cada nivel (con ejemplos de variables reales).
 
 Salida: escenarios_por_tipo.pdf
 """
+import json
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -99,6 +100,59 @@ SECCIONES = [
 ]
 
 
+# nombres legibles para las variables (clave = nombre sin prefijo w2/w3)
+ETIQUETAS = {
+    "profile_racethnicity": "Raza / etnia", "profile_born": "Evangélico (born-again)",
+    "profile_relig": "Religión", "profile_educ5": "Educación", "profile_age": "Edad",
+    "profile_income": "Ingreso", "profile_gender": "Género",
+    "profile_marital": "Estado civil", "profile_region4": "Región",
+    "profile_region9": "Región (9)", "profile_metro": "Zona metropolitana",
+    "profile_lgbt": "Se identifica LGBT", "profile_employ": "Situación laboral",
+    "profile_genhealth": "Salud general (perfil)",
+    "ftgay": "Term. a gays", "fttrans": "Term. a personas trans",
+    "ftfeminists": "Term. a feministas", "ftatheists": "Term. a ateos",
+    "ftmuslims": "Term. a musulmanes", "ftsocialists": "Term. a socialistas",
+    "ftcapitalists": "Term. a capitalistas", "ftpolice": "Term. a la policía",
+    "ftjournal": "Term. a periodistas", "fttrump": "Term. a Trump",
+    "ftjb": "Term. a Biden", "ftbiden": "Term. a Biden",
+    "ftdem": "Term. a Demócratas", "ftrep": "Term. a Republicanos",
+    "gundiff": "Control de armas", "c_self": "Cambio climático",
+    "abortion": "Aborto", "aca": "Obamacare (ACA)", "deport": "Deportación / inmigración",
+    "lcself": "Autoubicación izq–der", "rr1": "Resentimiento racial (1)",
+    "rr2": "Resentimiento racial (2)", "w1": "Sexismo moderno (1)",
+    "w2": "Sexismo moderno (2)", "emp_place": "Empatía",
+    "covid_gather": "Juntarse (COVID)", "covid_out": "Salir (COVID)",
+    "covid_work": "COVID: trabajo", "covid_fin": "COVID: finanzas",
+    "covid_sick": "COVID: enfermó", "covid_know": "COVID: conoce casos",
+    "discern": "Discernir noticias", "p5": "Consumo info política",
+    "pe": "Consumo info política", "genhealth": "Salud general",
+    "phq92": "Depresión (PHQ)", "hl032": "Salud (HL032)",
+    "pid7x": "Identificación partidaria", "pid1r": "Identificación partidaria",
+    "pidstr": "Fuerza partidaria",
+    # near-leakage / ola 2-3
+    "vote20d1": "Voto declarado (leak)", "econnow": "Estado de la economía",
+    "con_house": "Confianza en el Congreso", "ftbs": "Term. a Sanders",
+    "dempref1": "Preferencia primaria Dem", "ran_vote2cand5": "Voto en primaria",
+    "total_time_pk_cjus": "Tiempo de respuesta (admin)",
+    "profile_hh18ov": "Adultos en el hogar", "newskeepup": "Se mantiene al día",
+    "marital": "Estado civil", "fb3": "Uso de Facebook (3)",
+    "fb4": "Uso de Facebook (4)",
+}
+
+
+def legible(var):
+    base = var
+    for p in ("w2", "w3", "profile_"):
+        if var.startswith(p) and var[len(p):] in ETIQUETAS:
+            base = var[len(p):]
+            break
+    et = ETIQUETAS.get(base, ETIQUETAS.get(var))
+    if et:
+        # marcar la ola w3 (post-eleccion) para desambiguar duplicados w2/w3
+        return et + (" (w3)" if var.startswith("w3") else "")
+    return var
+
+
 def build():
     doc = SimpleDocTemplate(
         "escenarios_por_tipo.pdf", pagesize=A4,
@@ -174,6 +228,62 @@ def build():
             Spacer(1, 0.25 * cm),
         ]
         el.append(KeepTogether(bloque))
+
+    # ---- permutation importance por escenario ----
+    from reportlab.platypus import PageBreak
+    el.append(PageBreak())
+    el.append(Paragraph("Variables más importantes por escenario", h1))
+    el.append(Paragraph(
+        "Importancia por <b>permutación</b> (no MDI): se mide cuántos puntos de "
+        "accuracy se <b>pierden</b> al desordenar al azar cada variable en el "
+        "conjunto de test. Es honesta con la redundancia —una variable cuya "
+        "información ya está en otra no recibe crédito—. XGBoost, n_repeats=10. "
+        "La barra es relativa al máximo de cada escenario.", intro))
+
+    with open("perm_escenarios.json", encoding="utf-8") as f:
+        perm = json.load(f)
+
+    perm_lbl = ParagraphStyle("perm_lbl", parent=ss["Normal"], fontSize=9, leading=11)
+    perm_bar = ParagraphStyle("perm_bar", parent=ss["Normal"], fontSize=8.5,
+                              fontName="Courier", leading=11)
+
+    for nom, _, _, acc, _, col in FILAS:
+        items = perm.get(nom, [])
+        if not items:
+            continue
+        mx = max(m for _, m, _ in items) or 1.0
+        filas = []
+        for v, mean, std in items:
+            n = max(1, round(10 * mean / mx)) if mean > 0 else 0
+            bar = "█" * n
+            pts = f"{mean*100:.1f}"
+            filas.append([Paragraph(legible(v), perm_lbl),
+                          Paragraph(f'<font color="#{col.hexval()[2:]}">{bar}</font> '
+                                    f"{pts}", perm_bar)])
+        tt = Table(filas, colWidths=[7.0 * cm, 8.5 * cm])
+        tt.setStyle(TableStyle([
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("TOPPADDING", (0, 0), (-1, -1), 1.5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+            ("LINEBEFORE", (0, 0), (0, -1), 3, col),
+            ("LEFTPADDING", (0, 0), (0, -1), 8),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        bloque = [
+            Paragraph(f'<font color="#{col.hexval()[2:]}">■</font> '
+                      f"<b>{nom}</b>  ·  accuracy {acc}", sec_t),
+            tt,
+            Spacer(1, 0.3 * cm),
+        ]
+        el.append(KeepTogether(bloque))
+
+    el.append(Paragraph(
+        "Lectura: en el nivel <b>apolítico</b> mandan el ser <b>evangélico</b> y la "
+        "<b>raza/etnia</b> (la espina dorsal sociológica del voto). Al sumar issues, "
+        "los <b>termómetros a policía, periodistas y socialistas</b> y el "
+        "<b>control de armas</b> pasan al frente. En <b>near-leakage</b> las "
+        "importancias se <b>desploman</b> (~0,3 pts): con 342 variables todo está "
+        "tan duplicado que permutar una sola casi no mueve el accuracy.", cap))
 
     # ---- grafico embebido ----
     el.append(Spacer(1, 0.3 * cm))
