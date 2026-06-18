@@ -33,12 +33,8 @@ def grupo_pid(v):
     return "?"
 
 
-def main():
-    df, y = S.datos()
-    cols = S4.BASE_APOL + S4.CONDUCTA + S4.N3a + S4.N3b + S4.N3c
-    X = S.prep(df, cols)
-
-    # alinear metadatos por indice posicional
+def analizar(X, y, df, titulo):
+    # metadatos externos (no son features): partidismo e ideologia declarada
     pid = df["pid7x"].mask(df["pid7x"].isin(E_MISSING)).values
     lc = df["w2lcself"].mask(df["w2lcself"].isin(E_MISSING)).values
 
@@ -50,7 +46,7 @@ def main():
     yte = y[ite]
     acc = accuracy_score(yte, pred)
     err = pred != yte
-    print(f"Escenario 3c — {X.shape[1]} vars · test n={len(ite)} · acc={acc:.3f}")
+    print(f"{titulo} — {X.shape[1]} vars · test n={len(ite)} · acc={acc:.3f}")
     print(f"Errores: {err.sum()} de {len(ite)} ({err.mean()*100:.1f}%)\n")
 
     pid_te = pid[ite]
@@ -94,6 +90,12 @@ def main():
     ic = (((lc_te >= 5) & (voto == 1)) | ((lc_te <= 3) & (voto == 0))) & val
     print(f"  voto contrario a la ideología declarada: {ic.sum()}, "
           f"error {(err[ic].mean()*100 if ic.sum() else 0):.0f}%")
+
+
+def main():
+    df, y = S.datos()
+    Xfull, _ = E.build_X(df)
+    analizar(Xfull, y, df, "Nivel 4 (casi todo pre-elección, ~0.97)")
 
 
 if __name__ == "__main__":
