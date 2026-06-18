@@ -56,6 +56,9 @@ def comparar(X, y, titulo):
 def main():
     df, y = S.datos()
     comparar(S.prep(df, S4.BASE_APOL), y, "Nivel 1 apolítico")
+    # penúltimo (3c): sin termómetros a candidatos/partidos (modelo legítimo)
+    c3c = S4.BASE_APOL + S4.CONDUCTA + S4.N3a + S4.N3b + S4.N3c
+    comparar(S.prep(df, c3c), y, "Penúltimo 3c (sin term. a políticos)")
     Xfull, _ = E.build_X(df)
     comparar(Xfull, y, "Nivel 4 (casi todo pre-elección)")
 
