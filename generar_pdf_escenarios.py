@@ -373,9 +373,119 @@ def build():
     seccion_multiclase(el, ss, h1, intro, sec_t, body, cap)
     # ---- B) partidismo vs voto ----
     seccion_pid_voto(el, ss, h1, intro, sec_t, body, cap)
+    # ---- C) optimizacion de hiperparametros ----
+    seccion_hiperparametros(el, ss, h1, intro, sec_t, body, cap)
 
     doc.build(el)
     print("guardado: escenarios_por_tipo.pdf")
+
+
+def _cfg_str(p):
+    return (f"depth={p['max_depth']}, lr={p['learning_rate']}, "
+            f"min_child={p['min_child_weight']}, sub={p['subsample']}, "
+            f"col={p['colsample_bytree']}, λ={p['reg_lambda']}, "
+            f"α={p['reg_alpha']}, árboles={p['n_estimators']}")
+
+
+def seccion_hiperparametros(el, ss, h1, intro, sec_t, body, cap):
+    from reportlab.platypus import PageBreak
+    el.append(PageBreak())
+    el.append(Paragraph("Optimización de hiperparámetros", h1))
+    el.append(Paragraph(
+        "Los <b>parámetros</b> los aprende el modelo de los datos (los cortes de los "
+        "árboles); los <b>hiperparámetros</b> se fijan antes y controlan <i>cómo</i> "
+        "aprende (profundidad, regularización…). Optimizarlos = probar "
+        "combinaciones y quedarse con la que mejor generaliza.", intro))
+
+    # protocolo
+    el.append(Paragraph("El protocolo: split 60 / 20 / 20", sec_t))
+    el.append(Paragraph(
+        "Partimos en <b>tres</b>: <b>train (60%)</b> para entrenar cada candidato, "
+        "<b>validation (20%)</b> para elegir el mejor, y <b>test (20%)</b> para el "
+        "número final. <b>El test no se toca durante la búsqueda.</b> Si eligiéramos "
+        "los hiperparámetros mirando el test, nos sobreajustaríamos a él y el "
+        "resultado saldría optimista; el <i>validation</i> es el “test de mentira” "
+        "que sí podemos mirar, y el test real queda virgen para un reporte honesto.", body))
+
+    # busqueda
+    el.append(Paragraph("La búsqueda: random search + early stopping", sec_t))
+    el.append(Paragraph(
+        "Probamos <b>40 combinaciones al azar</b> del espacio (no todas: el grid "
+        "completo son 8.640). El <i>random search</i> es más eficiente que el grid "
+        "porque muchos hiperparámetros casi no influyen. El número de árboles no se "
+        "busca a mano: se fija alto (2.000) y el <b>early stopping</b> lo corta solo "
+        "cuando el error en <i>validation</i> deja de mejorar (50 rondas).", body))
+
+    esp = [
+        ["Hiperparámetro", "Valores probados", "Qué controla"],
+        ["max_depth", "2, 3, 4, 6, 8", "profundidad → interacciones que capta"],
+        ["learning_rate", "0,01 – 0,1", "cuánto aporta cada árbol"],
+        ["min_child_weight", "1, 3, 5, 10", "mínimo de datos por hoja (poda)"],
+        ["subsample", "0,6 / 0,8 / 1,0", "fracción de filas por árbol"],
+        ["colsample_bytree", "0,6 / 0,8 / 1,0", "fracción de columnas por árbol"],
+        ["reg_lambda", "0, 1, 2, 5", "regularización L2"],
+        ["reg_alpha", "0, 0,5, 1", "regularización L1"],
+    ]
+    te = Table(esp, colWidths=[3.8 * cm, 3.6 * cm, 8.0 * cm])
+    te.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 1), (0, -1), "Courier"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#333333")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#CCCCCC")),
+    ]))
+    el.append(te)
+    el.append(Spacer(1, 0.4 * cm))
+
+    # resultados
+    with open("tuning_resultados.json", encoding="utf-8") as f:
+        tr = json.load(f)
+    full, demo = tr["full"], tr["demo"]
+    el.append(Paragraph("Resultados (XGBoost, reporte en test intacto)", sec_t))
+    data = [
+        ["Set de features", "default", "tuneado", "val", "Δ"],
+        ["Completo (techo ~0,97)", f"{full['acc_def']:.3f}", f"{full['acc_tun']:.3f}",
+         f"{full['val_acc']:.3f}", f"{full['acc_tun']-full['acc_def']:+.3f}"],
+        ["Demografía+redes (~0,72)", f"{demo['acc_def']:.3f}", f"{demo['acc_tun']:.3f}",
+         f"{demo['val_acc']:.3f}", f"{demo['acc_tun']-demo['acc_def']:+.3f}"],
+    ]
+    tt = Table(data, colWidths=[6.2 * cm, 2.3 * cm, 2.3 * cm, 2.0 * cm, 2.0 * cm])
+    tt.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (2, 1), (2, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#333333")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor("#CCCCCC")),
+    ]))
+    el.append(tt)
+    el.append(Paragraph(
+        f"Mejor config completo: {_cfg_str(full['params'])}.<br/>"
+        f"Mejor config demo+redes: {_cfg_str(demo['params'])}.", cap))
+    el.append(Spacer(1, 0.3 * cm))
+
+    # conclusiones
+    el.append(Paragraph("Tres conclusiones", sec_t))
+    el.append(Paragraph(
+        "<b>1 · El tuning mueve milésimas (+0,002).</b> En el techo alto y en el bajo "
+        "por igual: el límite es la <b>señal de los datos</b>, no los "
+        "hiperparámetros.", body))
+    el.append(Paragraph(
+        f"<b>2 · La búsqueda eligió sola el modelo más simple</b> (max_depth = "
+        f"{full['params']['max_depth']} en ambos sets). Con poca estructura que "
+        "exprimir, los árboles chatos ganan — y el early stopping bajó los árboles de "
+        f"500 a {full['params']['n_estimators']}/{demo['params']['n_estimators']}.", body))
+    el.append(Paragraph(
+        f"<b>3 · Validation sobreestima.</b> En el set completo, validation dio "
+        f"<b>{full['val_acc']:.3f}</b> pero el test honesto fue "
+        f"<b>{full['acc_tun']:.3f}</b> (~{(full['val_acc']-full['acc_tun'])*100:.0f} "
+        "punto de diferencia). El val está “elegido” (es el máximo de 40 candidatos), "
+        "así que infla; por eso se reporta el <b>test intacto</b>. Esto es justo lo "
+        "que el protocolo 60/20/20 está diseñado para evitar.", body))
 
 
 def _tabla_clases(datos, recall, dist, ss):

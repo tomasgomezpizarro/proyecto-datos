@@ -80,8 +80,26 @@ def tunear(nombre, X, y):
           f"col={mejor_p['colsample_bytree']} lambda={mejor_p['reg_lambda']} "
           f"alpha={mejor_p['reg_alpha']} n_est={mejor.best_iteration + 1}")
 
+    return {
+        "nombre": nombre,
+        "n_train": len(X_tr), "n_val": len(X_val), "n_test": len(X_te),
+        "acc_def": float(acc_def), "acc_tun": float(acc_tun),
+        "f1_tun": float(f1_tun), "val_acc": float(mejor_val),
+        "params": {
+            "max_depth": int(mejor_p["max_depth"]),
+            "learning_rate": float(mejor_p["learning_rate"]),
+            "min_child_weight": int(mejor_p["min_child_weight"]),
+            "subsample": float(mejor_p["subsample"]),
+            "colsample_bytree": float(mejor_p["colsample_bytree"]),
+            "reg_lambda": float(mejor_p["reg_lambda"]),
+            "reg_alpha": float(mejor_p["reg_alpha"]),
+            "n_estimators": int(mejor.best_iteration + 1),
+        },
+    }
+
 
 if __name__ == "__main__":
+    import json
     df = pd.read_csv(E.CSV, encoding="latin-1", low_memory=False)
     df = df[df["w2presvtwho"].isin([1, 2])].copy()
     y = (df["w2presvtwho"].values == 2).astype(int)
@@ -89,5 +107,11 @@ if __name__ == "__main__":
     Xdemo = Xfull[[c for c in E.DEMO_REDES if c in Xfull.columns]]
 
     print(f"Busqueda aleatoria: {N_ITER} candidatos, seleccion por VAL, reporte en TEST")
-    tunear("FULL pre-eleccion (techo alto ~0.97)", Xfull, y)
-    tunear("Demografia+redes (techo bajo ~0.72)", Xdemo, y)
+    res = {
+        "full": tunear("FULL pre-eleccion (techo alto ~0.97)", Xfull, y),
+        "demo": tunear("Demografia+redes (techo bajo ~0.72)", Xdemo, y),
+        "n_iter": N_ITER, "espacio": ESPACIO,
+    }
+    with open("tuning_resultados.json", "w", encoding="utf-8") as f:
+        json.dump(res, f, ensure_ascii=False, indent=2)
+    print("\nguardado: tuning_resultados.json")
