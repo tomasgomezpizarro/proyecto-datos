@@ -27,7 +27,7 @@ FILAS = [
     ("+ afecto identitario",       8,  90, "0,851", "+0,05",   C_IDENT),
     ("+ posiciones de issues",    14, 104, "0,926", "+0,075",  C_ISSUE),
     ("+ ideología explícita",      6, 110, "0,933", "+0,01",   C_ISSUE),
-    ("+ actitudes a candidatos",  232, 342, "0,971", "+0,04",  C_LEAK),
+    ("+ actitudes a candidatos",  172, 282, "0,971", "+0,04",  C_LEAK),
 ]
 
 # explicaciones: (titulo, color, accuracy, contenido_html, porque_html)
@@ -89,14 +89,15 @@ SECCIONES = [
      "persona sobre aborto, clima y armas."),
 
     ("4 · + actitudes a candidatos (near-leakage)", C_LEAK, "0,971",
-     "Todo el resto de variables pre-elección, incluidas las que están "
-     "<b>peligrosamente cerca</b> de preguntar el voto:"
-     "<br/>• termómetros a Trump / Biden / partidos, intención de voto, "
-     "“qué partido es mejor en X”, aprobación presidencial.",
-     "Se incluye solo como <b>techo de referencia</b>. Son 232 variables "
-     "adicionales que aportan apenas +4 puntos: confirma que la señal útil ya "
-     "estaba en los issues. <b>No se usan en el modelo final</b> por riesgo de "
-     "leakage."),
+     "Las actitudes más explícitas hacia los candidatos, <b>depurando de entrada</b> "
+     "la paradata (tiempos de respuesta, orden de ítems) y el leak directo del voto "
+     "(intención de voto, voto a otros cargos, primaria):"
+     "<br/>• termómetros a Trump / Biden / partidos, aprobación presidencial, "
+     "“qué partido es mejor en X”.",
+     "Son 282 variables (172 más que el nivel anterior) que aportan apenas +4 puntos: "
+     "confirma que la señal útil ya estaba en los issues. Estas actitudes son "
+     "<i>proxies de preferencia</i> (sentir calor por Trump es casi declarar el voto), "
+     "así que el nivel se usa como <b>techo de referencia, no en el modelo final</b>."),
 ]
 
 
@@ -248,13 +249,18 @@ def build():
 
     with open("perm_escenarios.json", encoding="utf-8") as f:
         perm = json.load(f)
+    with open("perm_escenario_limpio.json", encoding="utf-8") as f:
+        perm_limpio = json.load(f)   # nivel 4 depurado (sin paradata ni leak directo)
 
     perm_lbl = ParagraphStyle("perm_lbl", parent=ss["Normal"], fontSize=9, leading=11)
     perm_bar = ParagraphStyle("perm_bar", parent=ss["Normal"], fontSize=8.5,
                               fontName="Courier", leading=11)
 
     for nom, _, _, acc, _, col in FILAS:
-        items = perm.get(nom, [])
+        if nom == "+ actitudes a candidatos":
+            items = perm_limpio[:8]          # top depurado, interpretable
+        else:
+            items = perm.get(nom, [])
         if not items:
             continue
         mx = max(m for _, m, _ in items) or 1.0
@@ -287,73 +293,10 @@ def build():
         "Lectura: en el nivel <b>apolítico</b> mandan el ser <b>evangélico</b> y la "
         "<b>raza/etnia</b> (la espina dorsal sociológica del voto). Al sumar issues, "
         "los <b>termómetros a policía, periodistas y socialistas</b> y el "
-        "<b>control de armas</b> pasan al frente. En <b>near-leakage</b> las "
-        "importancias se <b>desploman</b> (~0,3 pts): con 342 variables todo está "
-        "tan duplicado que permutar una sola casi no mueve el accuracy.", cap))
-
-    # ---- nivel 4 limpio: sin leaks ni paradata, con termometros ----
-    el.append(PageBreak())
-    el.append(Paragraph("Nivel 4 “limpio”: sin leaks ni paradata", h1))
-    el.append(Paragraph(
-        "El nivel 4 original incluía <b>basura</b> que se colaba: <b>paradata</b> "
-        "(tiempos de respuesta <i>total_time_*</i> y orden de los termómetros "
-        "<i>ft_order_*</i>) y <b>leak directo</b> del voto (intención de voto "
-        "<i>vote20d1</i>, voto a Cámara <i>voterep</i>, la primaria demócrata). "
-        "Quitamos <b>60 variables</b> (46 paradata + 14 leak) y mantuvimos los "
-        "<b>termómetros sustantivos</b>. Resultado:", intro))
-
-    comp = Table([
-        ["Escenario", "Variables", "Accuracy"],
-        ["Nivel 4 original (con leaks + paradata)", "342", "0,971"],
-        ["Nivel 4 limpio (sin leaks/paradata, con termómetros)", "282", "0,971"],
-    ], colWidths=[10.5 * cm, 2.5 * cm, 2.5 * cm])
-    comp.setStyle(TableStyle([
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-        ("FONTNAME", (2, 1), (2, -1), "Helvetica-Bold"),
-        ("FONTSIZE", (0, 0), (-1, -1), 9.5),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#333333")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
-        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor("#CCCCCC")),
-        ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#EEEBF5")),
-    ]))
-    el.append(comp)
-    el.append(Paragraph(
-        "<b>Idéntico (0,971 = 0,971).</b> Las 60 variables eliminadas no aportaban "
-        "<b>nada</b>: la paradata era ruido y el leak directo era redundante con los "
-        "termómetros. Confirma que sacar esa basura es gratis.", body))
-    el.append(Spacer(1, 0.3 * cm))
-
-    # permutation top del limpio
-    with open("perm_escenario_limpio.json", encoding="utf-8") as f:
-        limpio = json.load(f)
-    mx = max(m for _, m, _ in limpio) or 1.0
-    filas = []
-    for v, mean, std in limpio:
-        n = max(1, round(10 * mean / mx)) if mean > 0 else 0
-        filas.append([Paragraph(legible(v), perm_lbl),
-                      Paragraph(f'<font color="#{C_LEAK.hexval()[2:]}">{"█" * n}</font> '
-                                f"{mean*100:.1f}", perm_bar)])
-    tt = Table(filas, colWidths=[7.0 * cm, 8.5 * cm])
-    tt.setStyle(TableStyle([
-        ("FONTSIZE", (0, 0), (-1, -1), 9),
-        ("TOPPADDING", (0, 0), (-1, -1), 1.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
-        ("LINEBEFORE", (0, 0), (0, -1), 3, C_LEAK), ("LEFTPADDING", (0, 0), (0, -1), 8),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-    el.append(KeepTogether([
-        Paragraph(f'<font color="#{C_LEAK.hexval()[2:]}">■</font> '
-                  "<b>Top variables del nivel 4 limpio</b>  ·  accuracy 0,971", sec_t),
-        tt,
-    ]))
-    el.append(Paragraph(
-        "Ahora el ranking es honesto y se entiende: domina el <b>termómetro a "
-        "Trump</b> (−1,4 pts), seguido de la <b>aprobación a Trump</b> y los "
-        "termómetros a <b>Biden / Demócratas</b>. <b>Ojo:</b> estos siguen siendo "
-        "<i>proxies de preferencia</i> (sentir frío/calor por Trump es casi declarar "
-        "el voto). Por eso el <b>modelo final del proyecto no usa el nivel 4</b>: es "
-        "el techo de referencia, no un predictor legítimo.", cap))
+        "<b>control de armas</b> pasan al frente. En el nivel <b>near-leakage</b> "
+        "domina el <b>termómetro a Trump</b> (−1,4 pts) y la <b>aprobación "
+        "presidencial</b>: son actitudes hacia los candidatos, casi sinónimos del "
+        "voto — por eso este nivel es solo <b>techo de referencia</b>.", cap))
 
     # ---- grafico embebido ----
     el.append(Spacer(1, 0.3 * cm))
@@ -375,9 +318,60 @@ def build():
     seccion_pid_voto(el, ss, h1, intro, sec_t, body, cap)
     # ---- C) optimizacion de hiperparametros ----
     seccion_hiperparametros(el, ss, h1, intro, sec_t, body, cap)
+    # ---- D) conclusiones ----
+    seccion_conclusiones(el, ss, h1, intro, sec_t, body, cap)
 
     doc.build(el)
     print("guardado: escenarios_por_tipo.pdf")
+
+
+def seccion_conclusiones(el, ss, h1, intro, sec_t, body, cap):
+    from reportlab.platypus import PageBreak
+    el.append(PageBreak())
+    el.append(Paragraph("Conclusiones", h1))
+    el.append(Paragraph(
+        "El proyecto no buscó solo “predecir el voto”, sino entender <b>qué tipo de "
+        "información</b> lo determina y dónde está el límite de lo predecible. Los "
+        "resultados convergen en cinco ideas:", intro))
+
+    puntos = [
+        ("El voto se explica por las actitudes políticas, no por la demografía.",
+         "Saber edad, raza, educación y qué redes usás deja ~0,72-0,75. Lo que lleva "
+         "el accuracy a >0,93 son las <b>posiciones concretas sobre issues</b> "
+         "(aborto, clima, armas): el salto grande lo dan 14 variables, no la masa de "
+         "datos sociodemográficos."),
+        ("La ideología vive en las posiciones, no en la etiqueta.",
+         "Conocidas las opiniones sobre los issues, agregar la autoubicación "
+         "izquierda-derecha aporta apenas +1 punto: “soy conservador” es casi "
+         "información redundante de lo que la persona ya opina."),
+        ("El cuello de botella es la información, no el modelo.",
+         "El tuning de hiperparámetros mueve milésimas; LogReg, RandomForest y "
+         "XGBoost convergen cuando hay señal; y reducir el train de 75% a 60% no "
+         "cambia el resultado. Lo único que movió la aguja fue <b>sumar información "
+         "de otro tipo</b>."),
+        ("Hay un techo irreducible: los votantes “incoherentes”.",
+         "El ~3-6% de error no es azar ni falla del modelo: son <b>votantes "
+         "cruzados</b> (votan contra su partido e ideología), que explican hasta el "
+         "76% de los errores. Su voto no es función de las actitudes medidas, así que "
+         "<b>ningún modelo puede llegar a 100%</b>."),
+        ("Disciplina metodológica.",
+         "Distinguir <i>leakage</i> de predisposición estable; mirar f1_macro y recall "
+         "por clase ante el desbalance (las minorías son inmodelables); reportar con "
+         "barras de error y no sobre-leer un único split. Modelamos el problema como "
+         "<b>binario</b> (Trump vs Biden) por estas razones, no por comodidad."),
+    ]
+    for i, (tit, txt) in enumerate(puntos, start=1):
+        el.append(Paragraph(f"<b>{i} · {tit}</b>", body))
+        el.append(Paragraph(txt, ParagraphStyle(
+            "cc", parent=body, leftIndent=12, spaceAfter=8)))
+
+    el.append(Spacer(1, 0.2 * cm))
+    el.append(Paragraph(
+        "<b>En una frase:</b> en un electorado polarizado, el voto es casi un "
+        "sinónimo de las actitudes políticas —tanto que conocerlas alcanza para "
+        "predecirlo con >0,93—, y lo que queda sin explicar no es ignorancia del "
+        "modelo sino la parte genuinamente idiosincrática de la decisión humana.",
+        intro))
 
 
 def _cfg_str(p):

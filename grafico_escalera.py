@@ -59,16 +59,18 @@ def main():
         nombres.append(nom); nvars.append(n); medias.append(m); desvios.append(s)
         print(f"{nom.replace(chr(10),' '):42s} feats={n:3d}  acc={m:.3f}+-{s:.3f}")
 
-    # punto final: todo pre-eleccion (near-leakage)
+    # punto final: near-leakage DEPURADO (sin paradata ni leak directo del voto)
+    import exp_escenario_limpio as L
+    _, Xlimpio, _ = L.construir(df)
     accs = []
     for seed in range(5):
-        Xtr, Xte, ytr, yte = train_test_split(Xfull, y, test_size=0.25,
+        Xtr, Xte, ytr, yte = train_test_split(Xlimpio, y, test_size=0.25,
                                               random_state=seed, stratify=y)
         mdl = XGBClassifier(**S.XGB_PARAMS).fit(Xtr, ytr)
         accs.append(accuracy_score(yte, mdl.predict(Xte)))
     nombres.append("+ actitudes a\ncandidatos (near-leak)")  # near-leakage
-    nvars.append(Xfull.shape[1]); medias.append(np.mean(accs)); desvios.append(np.std(accs))
-    print(f"{'+ near-leakage (todo pre-eleccion)':42s} feats={Xfull.shape[1]:3d}  "
+    nvars.append(Xlimpio.shape[1]); medias.append(np.mean(accs)); desvios.append(np.std(accs))
+    print(f"{'+ near-leakage (depurado)':42s} feats={Xlimpio.shape[1]:3d}  "
           f"acc={np.mean(accs):.3f}+-{np.std(accs):.3f}")
 
     colores = [c for _, _, c in BLOQUES] + ["#8172B3"]
@@ -111,8 +113,8 @@ def main():
                 xy=(104, 0.926), xytext=(150, 0.86),
                 fontsize=9.5, color="#C44E52", fontweight="bold",
                 arrowprops=dict(arrowstyle="->", color="#C44E52", lw=1.5))
-    ax.annotate("+232 variables más\n= +4 puntos",
-                xy=(342, 0.971), xytext=(250, 0.905),
+    ax.annotate("+172 variables más\n= +4 puntos",
+                xy=(nvars[-1], medias[-1]), xytext=(205, 0.905),
                 fontsize=9.5, color="#8172B3", fontweight="bold",
                 arrowprops=dict(arrowstyle="->", color="#8172B3", lw=1.5))
 
