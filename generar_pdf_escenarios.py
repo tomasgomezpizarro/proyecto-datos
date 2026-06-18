@@ -369,8 +369,137 @@ def build():
                   "aporte).", cap),
     ]))
 
+    # ---- A) multiclase: por que no funciona ----
+    seccion_multiclase(el, ss, h1, intro, sec_t, body, cap)
+    # ---- B) partidismo vs voto ----
+    seccion_pid_voto(el, ss, h1, intro, sec_t, body, cap)
+
     doc.build(el)
     print("guardado: escenarios_por_tipo.pdf")
+
+
+def _tabla_clases(datos, recall, dist, ss):
+    """Tabla distribución + recall por clase, con recall bajo en rojo."""
+    cab = ["Clase", "n (casos)", "% del total", "Recall (acierto)"]
+    filas = [cab]
+    total = sum(dist.values())
+    estilo = [
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#333333")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#CCCCCC")),
+    ]
+    for i, (clase, n) in enumerate(sorted(dist.items(), key=lambda kv: -kv[1]), start=1):
+        r = recall.get(clase, 0.0)
+        filas.append([clase, str(n), f"{n/total*100:.1f}%", f"{r:.2f}"])
+        if r < 0.10:
+            estilo.append(("TEXTCOLOR", (3, i), (3, i), colors.HexColor("#C0392B")))
+            estilo.append(("FONTNAME", (3, i), (3, i), "Helvetica-Bold"))
+    t = Table(filas, colWidths=[5.0 * cm, 3.0 * cm, 3.5 * cm, 4.0 * cm])
+    t.setStyle(TableStyle(estilo))
+    return t
+
+
+def seccion_multiclase(el, ss, h1, intro, sec_t, body, cap):
+    from reportlab.platypus import PageBreak
+    el.append(PageBreak())
+    el.append(Paragraph("¿Y si el voto tiene más de dos clases?", h1))
+    el.append(Paragraph(
+        "Hasta acá modelamos <b>Trump vs Biden</b> (binario). Probamos dos variantes "
+        "multiclase y <b>ninguna funciona bien</b> — por la misma razón: el "
+        "<b>desbalance de clases</b>. El <i>accuracy</i> engaña (queda cerca de "
+        "“adivinar siempre la mayoría”); el <b>f1_macro</b> y el <b>recall por "
+        "clase</b> lo exponen. Modelo: HistGradientBoosting, holdout ×5.", intro))
+
+    with open("multiclase_resultados.json", encoding="utf-8") as f:
+        mc = json.load(f)
+
+    # general con Otro
+    g = mc["general"]
+    el.append(Paragraph("1 · Voto general con la clase “Otro” (3 clases)", sec_t))
+    el.append(Paragraph(
+        f"Trump / Biden / Otro. accuracy <b>{g['acc']:.3f}</b> · f1_macro "
+        f"<b>{g['f1']:.3f}</b> · baseline “siempre la mayoría” {g['maj']:.3f}.", body))
+    el.append(_tabla_clases(g, g["recall"], g["dist"], ss))
+    el.append(Paragraph(
+        "El accuracy alto (0,935) es un <b>espejismo</b>: viene de que Trump y Biden "
+        "se predicen casi perfecto. La clase <b>“Otro” (171 casos, 3,8%) tiene recall "
+        "0,07</b> — el modelo casi nunca la acierta. Los terceros partidos son "
+        "~2% del electorado y no tienen un perfil propio: se reparten entre los dos "
+        "grandes. <b>Por eso modelamos el problema como binario.</b>", cap))
+    el.append(Spacer(1, 0.4 * cm))
+
+    # primaria
+    p = mc["primaria"]
+    el.append(Paragraph("2 · Primaria demócrata (vote20cand, 7 candidatos)", sec_t))
+    el.append(Paragraph(
+        f"Biden / Sanders / Warren / Buttigieg / Klobuchar / Bloomberg / Otro. "
+        f"accuracy <b>{p['acc']:.3f}</b> · f1_macro <b>{p['f1']:.3f}</b> · "
+        f"baseline {p['maj']:.3f}.", body))
+    el.append(_tabla_clases(p, p["recall"], p["dist"], ss))
+    el.append(Paragraph(
+        "Acá el f1_macro se <b>derrumba a 0,23</b>. El modelo solo aprende "
+        "<b>Biden</b> (recall 0,93) y a medias <b>Sanders</b> (0,55); "
+        "<b>Bloomberg, Buttigieg y Klobuchar tienen recall 0,00</b> — con &lt;90 "
+        "casos cada uno, no hay con qué aprenderlos. La primaria <i>fue</i>, en los "
+        "hechos, Biden vs Sanders. <b>Ninguna técnica rescata una clase de 52 "
+        "ejemplos solapada con una mayoría de 1.628.</b>", cap))
+    el.append(Spacer(1, 0.3 * cm))
+    el.append(Paragraph(
+        "<b>Lección:</b> con clases minoritarias el accuracy miente; hay que mirar "
+        "f1_macro y recall por clase. El cuello de botella es la <b>cantidad de "
+        "casos</b>, no el método.", body))
+
+
+def seccion_pid_voto(el, ss, h1, intro, sec_t, body, cap):
+    from reportlab.platypus import PageBreak
+    el.append(PageBreak())
+    el.append(Paragraph("Predecir el voto vs predecir el partidismo", h1))
+    el.append(Paragraph(
+        "¿Es más fácil predecir <b>a quién votó</b> o <b>con qué partido se "
+        "identifica</b> (pid7x)? Con las <b>mismas features</b> (solo "
+        "demografía + uso de redes, sin actitudes políticas) y el mismo modelo "
+        "(XGBoost, holdout ×5), comparamos. <i>Sin</i> la clase “Otro” del voto.", intro))
+
+    with open("pid_vs_voto.json", encoding="utf-8") as f:
+        pv = json.load(f)
+
+    cab = ["Qué se predice", "Clases", "n", "Accuracy", "f1_macro"]
+    filas = [cab]
+    for k in ["voto_bin", "pid_bin", "pid_3"]:
+        v = pv[k]
+        filas.append([v["label"], str(v["clases"]), str(v["n"]),
+                      f"{v['acc']:.3f} ± {v['acc_std']:.3f}", f"{v['f1']:.3f}"])
+    t = Table(filas, colWidths=[6.3 * cm, 1.8 * cm, 1.8 * cm, 3.3 * cm, 2.3 * cm])
+    t.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#333333")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor("#CCCCCC")),
+        ("BACKGROUND", (0, 1), (-1, 2), colors.HexColor("#EAF1F7")),
+    ]))
+    el.append(t)
+    el.append(Paragraph(f"(features = {pv['feats']} variables de demografía + redes)", cap))
+    el.append(Spacer(1, 0.4 * cm))
+
+    el.append(Paragraph(
+        "<b>Voto (0,727) y partidismo binario (0,718) dan prácticamente lo mismo</b> "
+        "—la diferencia cae dentro del desvío—. No es casualidad: <b>voto e "
+        "identidad partidaria coinciden en ~94% de las personas</b> (correlación de "
+        "Spearman 0,78), así que para un modelo son <b>casi la misma variable</b>. "
+        "El techo de ~0,72 no es una propiedad “del voto” ni “del partidismo”: es el "
+        "<b>límite de lo que la demografía sola puede decir</b>.", body))
+    el.append(Paragraph(
+        "Cuando se agregan los <b>independientes</b> (3 clases), el accuracy cae a "
+        "<b>0,641</b> y el f1_macro a 0,49: los independientes no tienen un perfil "
+        "demográfico propio (están “en el medio”), así que son los más difíciles de "
+        "clasificar — el mismo fenómeno que veíamos en los votantes cruzados.", cap))
 
 
 if __name__ == "__main__":
