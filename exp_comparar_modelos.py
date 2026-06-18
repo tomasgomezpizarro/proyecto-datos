@@ -1,5 +1,7 @@
 """
-Compara LogReg, RandomForest y XGBoost en el nivel 1 (apolítico, 75 vars).
+Compara LogReg, RandomForest y XGBoost en dos extremos:
+  - nivel 1 (apolítico, 75 vars): señal débil.
+  - nivel 4 (casi todo pre-elección, 342 vars): near-leakage, señal fuerte.
 
 LogReg y RF no toleran NaN -> pipeline con imputacion (mediana); LogReg ademas
 escala. XGBoost maneja NaN nativo. Mismo holdout x5 (75/25) para comparar.
@@ -16,6 +18,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 
+import exp_w2presvtwho as E
 import exp_escenarios as S
 import exp_escenarios4 as S4
 
@@ -32,11 +35,9 @@ MODELOS = {
 }
 
 
-def main():
-    df, y = S.datos()
-    X = S.prep(df, S4.BASE_APOL)
-    print(f"Nivel 1 apolítico — {X.shape[1]} variables, n={len(y)} (Trump vs Biden)")
-    print("Holdout x5 (75/25 estratificado)\n")
+def comparar(X, y, titulo):
+    print(f"\n{titulo} — {X.shape[1]} variables, n={len(y)} (Trump vs Biden)")
+    print("Holdout x5 (75/25 estratificado)")
     print(f"  {'modelo':14s} {'accuracy':>16s}   {'f1_macro':>8s}")
     print("  " + "-" * 44)
     for nombre, modelo in MODELOS.items():
@@ -50,6 +51,13 @@ def main():
             f1s.append(f1_score(yte, p, average="macro"))
         a, f = np.array(accs), np.array(f1s)
         print(f"  {nombre:14s}   {a.mean():.3f} ± {a.std():.3f}      {f.mean():.3f}")
+
+
+def main():
+    df, y = S.datos()
+    comparar(S.prep(df, S4.BASE_APOL), y, "Nivel 1 apolítico")
+    Xfull, _ = E.build_X(df)
+    comparar(Xfull, y, "Nivel 4 (casi todo pre-elección)")
 
 
 if __name__ == "__main__":
