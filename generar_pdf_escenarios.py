@@ -137,6 +137,12 @@ ETIQUETAS = {
     "profile_hh18ov": "Adultos en el hogar", "newskeepup": "Se mantiene al día",
     "marital": "Estado civil", "fb3": "Uso de Facebook (3)",
     "fb4": "Uso de Facebook (4)",
+    # nivel 4 limpio
+    "apppres": "Aprobación a Trump (presidente)",
+    "appcorona": "Aprobación a Trump (coronavirus)",
+    "remove": "Destitución de Trump (impeachment)",
+    "dtcare": "“Trump se preocupa por mí”", "dsmart": "Estereotipo: ¿demócratas inteligentes?",
+    "covid_us": "Manejo del COVID en EE.UU.", "ftimmig": "Term. a inmigrantes",
 }
 
 
@@ -284,6 +290,70 @@ def build():
         "<b>control de armas</b> pasan al frente. En <b>near-leakage</b> las "
         "importancias se <b>desploman</b> (~0,3 pts): con 342 variables todo está "
         "tan duplicado que permutar una sola casi no mueve el accuracy.", cap))
+
+    # ---- nivel 4 limpio: sin leaks ni paradata, con termometros ----
+    el.append(PageBreak())
+    el.append(Paragraph("Nivel 4 “limpio”: sin leaks ni paradata", h1))
+    el.append(Paragraph(
+        "El nivel 4 original incluía <b>basura</b> que se colaba: <b>paradata</b> "
+        "(tiempos de respuesta <i>total_time_*</i> y orden de los termómetros "
+        "<i>ft_order_*</i>) y <b>leak directo</b> del voto (intención de voto "
+        "<i>vote20d1</i>, voto a Cámara <i>voterep</i>, la primaria demócrata). "
+        "Quitamos <b>60 variables</b> (46 paradata + 14 leak) y mantuvimos los "
+        "<b>termómetros sustantivos</b>. Resultado:", intro))
+
+    comp = Table([
+        ["Escenario", "Variables", "Accuracy"],
+        ["Nivel 4 original (con leaks + paradata)", "342", "0,971"],
+        ["Nivel 4 limpio (sin leaks/paradata, con termómetros)", "282", "0,971"],
+    ], colWidths=[10.5 * cm, 2.5 * cm, 2.5 * cm])
+    comp.setStyle(TableStyle([
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (2, 1), (2, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#333333")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.4, colors.HexColor("#CCCCCC")),
+        ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#EEEBF5")),
+    ]))
+    el.append(comp)
+    el.append(Paragraph(
+        "<b>Idéntico (0,971 = 0,971).</b> Las 60 variables eliminadas no aportaban "
+        "<b>nada</b>: la paradata era ruido y el leak directo era redundante con los "
+        "termómetros. Confirma que sacar esa basura es gratis.", body))
+    el.append(Spacer(1, 0.3 * cm))
+
+    # permutation top del limpio
+    with open("perm_escenario_limpio.json", encoding="utf-8") as f:
+        limpio = json.load(f)
+    mx = max(m for _, m, _ in limpio) or 1.0
+    filas = []
+    for v, mean, std in limpio:
+        n = max(1, round(10 * mean / mx)) if mean > 0 else 0
+        filas.append([Paragraph(legible(v), perm_lbl),
+                      Paragraph(f'<font color="#{C_LEAK.hexval()[2:]}">{"█" * n}</font> '
+                                f"{mean*100:.1f}", perm_bar)])
+    tt = Table(filas, colWidths=[7.0 * cm, 8.5 * cm])
+    tt.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 1.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+        ("LINEBEFORE", (0, 0), (0, -1), 3, C_LEAK), ("LEFTPADDING", (0, 0), (0, -1), 8),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+    ]))
+    el.append(KeepTogether([
+        Paragraph(f'<font color="#{C_LEAK.hexval()[2:]}">■</font> '
+                  "<b>Top variables del nivel 4 limpio</b>  ·  accuracy 0,971", sec_t),
+        tt,
+    ]))
+    el.append(Paragraph(
+        "Ahora el ranking es honesto y se entiende: domina el <b>termómetro a "
+        "Trump</b> (−1,4 pts), seguido de la <b>aprobación a Trump</b> y los "
+        "termómetros a <b>Biden / Demócratas</b>. <b>Ojo:</b> estos siguen siendo "
+        "<i>proxies de preferencia</i> (sentir frío/calor por Trump es casi declarar "
+        "el voto). Por eso el <b>modelo final del proyecto no usa el nivel 4</b>: es "
+        "el techo de referencia, no un predictor legítimo.", cap))
 
     # ---- grafico embebido ----
     el.append(Spacer(1, 0.3 * cm))
